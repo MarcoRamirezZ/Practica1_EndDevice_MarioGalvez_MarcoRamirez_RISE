@@ -44,6 +44,9 @@
 #include "board.h"
 #include "fsl_os_abstraction.h"
 
+/* Practica 1*/
+#include "MyNewTask.h"
+
 /************************************************************************************
 *************************************************************************************
 * Private macros
@@ -331,6 +334,11 @@ void App_init( void )
     
     /*signal app ready*/
     LED_StartSerialFlash(LED1);
+
+    /* Initialize timer for LEDs */
+    MyTask_Init();
+    mCoordInfo.logicalChannel = gLogicalChannel12_c;////////////////////////////////request de la practica
+
 #if mEnterLowPowerWhenIdle_c
     if (!PWRLib_MCU_WakeupReason.Bits.DeepSleepTimeout)
     {
@@ -432,6 +440,7 @@ void AppThread(osaTaskParam_t argument)
                 (void)NWK_MLME_SapHandler( &msg, 0 );
                 msg.msgType = gMlmeSetReq_c;
                 msg.msgData.setReq.pibAttribute = gMPibLogicalChannel_c;
+                mCoordInfo.logicalChannel = gLogicalChannel12_c;////////////////////////////////request de la practica
                 msg.msgData.setReq.pibAttributeValue = (uint8_t *)&mCoordInfo.logicalChannel;
                 (void)NWK_MLME_SapHandler( &msg, 0 );                 
                 Serial_Print(interfaceId, "\n\rPIB elements restored from NVM:\n\r", gAllowToBlock_d); 
@@ -451,7 +460,6 @@ void AppThread(osaTaskParam_t argument)
                 Serial_Print(interfaceId, "PIB elements were not restored from NVM!\n\r", gAllowToBlock_d); 
 #endif
                 /* Goto Active Scan state. */
-                //mCoordInfo.logicalChannel = 12;
                 gState = stateScanActiveStart;
 #if gNvmTestActive_d 
             }
@@ -554,6 +562,8 @@ void AppThread(osaTaskParam_t argument)
                             TMR_StartLowPowerTimer(mTimer_c, gTmrSingleShotTimer_c ,mPollInterval, AppPollWaitTimeout, NULL );
                             /* Go to the listen state */
                             gState = stateListen;
+                            /*Inititate 3s LED Timer*/
+                            MyTaskTimer_Start();
                             OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c); 
                         }        
                         else 
@@ -1174,17 +1184,32 @@ static void App_HandleKeys
   )
 {
 #if gKBD_KeysCount_c > 0 
-    switch ( events ) 
+
+    switch ( events )
     { 
     case gKBD_EventLongSW1_c:
         OSA_EventSet(mAppEvent, gAppEvtPressedRestoreNvmBut_c);
+    break;
     case gKBD_EventLongSW2_c:
+    break;
     case gKBD_EventLongSW3_c:
+    break;
     case gKBD_EventLongSW4_c:
-    case gKBD_EventSW1_c:
-    case gKBD_EventSW2_c:
+    break;
+    case gKBD_EventSW1_c://Este es el switch 4, error en los enums de Keyboard.h
+    	updateLEDCounter( BLUE );//Update the LED on the board
+    	//Send packet
+    break;
+    case gKBD_EventSW2_c://Este es el switch 3, error en los enums de Keyboard.h
+    	updateLEDCounter( GREEN ); //Update the LED on the board
+    	//send packet
+    break;
     case gKBD_EventSW3_c:
+
+    break;
     case gKBD_EventSW4_c:
+
+    break;
 #if gTsiSupported_d
     case gKBD_EventSW5_c:    
     case gKBD_EventSW6_c:    
@@ -1193,11 +1218,11 @@ static void App_HandleKeys
     case gKBD_EventLongSW5_c:
     case gKBD_EventLongSW6_c:       
 #endif
-        if(gState == stateInit)
-        {
-            LED_StopFlashingAllLeds();
-            OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
-        }
+    }
+    if(gState == stateInit)
+    {
+        LED_StopFlashingAllLeds();
+        OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
     }
 #endif
 }
