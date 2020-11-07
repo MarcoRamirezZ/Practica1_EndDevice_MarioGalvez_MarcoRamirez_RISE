@@ -86,7 +86,7 @@ static void    App_HandleMcpsInput(mcpsToNwkMessage_t *pMsgIn);
 static void    App_TransmitUartData(void);
 static void    AppPollWaitTimeout(void *);
 static void    App_HandleKeys( key_event_t events );
-
+static void    SendMCPS( void );
 void App_init( void );
 void AppThread (osaTaskParam_t argument);
 void App_Idle_Task(uint32_t argument);
@@ -586,6 +586,12 @@ void AppThread(osaTaskParam_t argument)
             break; 
 
         case stateListen:
+
+        	if(getFlag() == 1)
+        	{/* When Timer reaches 3 seconds send counter to coordinator*/
+        		setFlag(0);
+        		SendMCPS();
+        	}
             /* Transmit to coordinator data received from UART. */
             if (ev & gAppEvtMessageFromMLME_c)
             {  
@@ -1198,11 +1204,11 @@ static void App_HandleKeys
     break;
     case gKBD_EventSW1_c://Este es el switch 4, error en los enums de Keyboard.h
     	updateLEDCounter( BLUE );//Update the LED on the board
-    	//Send packet
+    	SendMCPS();//Send to the air
     break;
     case gKBD_EventSW2_c://Este es el switch 3, error en los enums de Keyboard.h
     	updateLEDCounter( GREEN ); //Update the LED on the board
-    	//send packet
+    	SendMCPS();//Send to the air
     break;
     case gKBD_EventSW3_c:
 
@@ -1225,6 +1231,83 @@ static void App_HandleKeys
         OSA_EventSet(mAppEvent, gAppEvtDummyEvent_c);
     }
 #endif
+}
+
+void SendMCPS(  )
+{
+    const uint8_t count = 13;
+    ledStates_e counterLed = returnLEDCounter();
+    char led_info[15] = "counter =  \n\r";
+    led_info[10] = (char) counterLed + 48;//ASCII 0 is 48d
+    /* Count bytes receive over the serial interface */
+    //Serial_RxBufferByteCount(interfaceId, &count);
+
+    //if( 0 == count )
+    // {
+       // return;
+    //}
+
+    /* Limit data transfer size */
+    //if( count > mMaxKeysToReceive_c )
+    //{
+    //    count = mMaxKeysToReceive_c;
+    //}
+
+    /* Use multi buffering for increased TX performance. It does not really
+    have any effect at low UART baud rates, but serves as an
+    example of how the throughput may be improved in a real-world
+    application where the data rate is of concern. */
+    if( (mcPendingPackets < mDefaultValueOfMaxPendingDataPackets_c) && (mpPacket == NULL) )
+    {
+        /* If the maximum number of pending data buffes is below maximum limit
+        and we do not have a data buffer already then allocate one. */
+        mpPacket = MSG_Alloc(sizeof(nwkToMcpsMessage_t) + gMaxPHYPacketSize_c);
+    }
+
+    if(mpPacket != NULL)
+    {
+        /* Data is available in the SerialManager's receive buffer. Now create an
+        MCPS-Data Request message containing the data. */
+        mpPacket->msgType = gMcpsDataReq_c;
+        mpPacket->msgData.dataReq.pMsdu = (uint8_t*)(&mpPacket->msgData.dataReq.pMsdu) + sizeof(mpPacket->msgData.dataReq.pMsdu);
+
+        //Serial_Read(interfaceId, mpPacket->msgData.dataReq.pMsdu, count, &count);
+        mpPacket->msgData.dataReq.pMsdu = (uint8_t*) &led_info;
+
+        /* Create the header using coordinator information gained during
+        the scan procedure. Also use the short address we were assigned
+        by the coordinator during association. */
+        FLib_MemCpy(&mpPacket->msgData.dataReq.dstAddr, &mCoordInfo.coordAddress, 8);
+        FLib_MemCpy(&mpPacket->msgData.dataReq.srcAddr, &maMyAddress, 8);
+        FLib_MemCpy(&mpPacket->msgData.dataReq.dstPanId, &mCoordInfo.coordPanId, 2);
+        FLib_MemCpy(&mpPacket->msgData.dataReq.srcPanId, &mCoordInfo.coordPanId, 2);
+        mpPacket->msgData.dataReq.dstAddrMode = mCoordInfo.coordAddrMode;
+        mpPacket->msgData.dataReq.srcAddrMode = mAddrMode;
+        mpPacket->msgData.dataReq.msduLength = sizeof(led_info);
+        /* Request MAC level acknowledgement of the data packet */
+        mpPacket->msgData.dataReq.txOptions = gMacTxOptionsAck_c;
+        /* Give the data packet a handle. The handle is
+        returned in the MCPS-Data Confirm message. */
+        mpPacket->msgData.dataReq.msduHandle = mMsduHandle++;
+        /* Don't use security */
+        mpPacket->msgData.dataReq.securityLevel = gMacSecurityNone_c;
+
+        /* Send the Data Request to the MCPS */
+        (void)NWK_MCPS_SapHandler(mpPacket, macInstance);
+
+        /* Prepare for another data buffer */
+        mpPacket = NULL;
+        mcPendingPackets++;
+    }
+
+    /* If the data wasn't send over the air because there are too many pending packets,
+    or new data has beed received, try to send it later   */
+    //Serial_RxBufferByteCount(interfaceId, &count);
+
+    if( count )
+    {
+        OSA_EventSet(mAppEvent, gAppEvtRxFromUart_c);
+    }
 }
 
 /******************************************************************************

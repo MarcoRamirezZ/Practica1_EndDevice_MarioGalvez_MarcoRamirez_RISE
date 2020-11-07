@@ -21,6 +21,8 @@ osaTaskId_t gMyTaskHandlerID = 0;
 /*Local variable to store the current state of the LEDs*/
 static ledStates_e ledsState = RED;
 
+uint8_t gTimerFlag = 0;
+
 /*Local variable to know if the device has been connected, if not, dont allow LED changes */
 uint8_t connection_flag = 0;
 
@@ -57,6 +59,7 @@ void My_Task( osaTaskParam_t argument )
 				ledsState++;
 				ledsState = ( ledsState >= BLACK ) ? RED : ledsState;
 				updateLED( ledsState );
+				gTimerFlag = 1;
 				break;
 
 			case gMyNewTaskEvent3_c: /* Event to stop the timer */
@@ -142,14 +145,20 @@ void updateLEDCounter(ledStates_e counter)
 	{
 		ledsState = counter;
 		updateLED( ledsState );
-		TMR_StartIntervalTimer(myTimerID, /*myTimerID*/1000, /* Timer's Timeout */myTaskTimerCallback, /* pointer to myTaskTimerCallback function */NULL);
+		TMR_StartIntervalTimer(myTimerID, /*myTimerID*/3000, /* Timer's Timeout */myTaskTimerCallback, /* pointer to myTaskTimerCallback function */NULL);
 	}
 	return;
 }
 
+uint8_t getFlag(void)
+{
+	return gTimerFlag;
+}
 
-
-
+void setFlag( uint8_t value )
+{
+	gTimerFlag = value;
+}
 
 
 

@@ -40,5 +40,7 @@ void MyTask_Init(void);
 void updateLED( ledStates_e state );
 ledStates_e returnLEDCounter(void);
 void updateLEDCounter(ledStates_e counter);
+uint8_t getFlag(void);
+void setFlag( uint8_t value );
 
 #endif /* MYNEWTASK_H_ */
